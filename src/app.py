@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
+import re
 from pathlib import Path
 
 app = FastAPI(title="Mergington High School API",
@@ -78,6 +79,9 @@ activities = {
 }
 
 
+EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
 @app.get("/")
 def root():
     return RedirectResponse(url="/static/index.html")
@@ -97,14 +101,23 @@ def signup_for_activity(activity_name: str, email: str):
 
     # Get the specific activity
     activity = activities[activity_name]
+    normalized_email = email.strip().lower()
+
+    # Validate email format
+    if not EMAIL_REGEX.match(normalized_email):
+        raise HTTPException(status_code=422, detail="Invalid email format")
+
+    # Validate activity has available capacity
+    if len(activity["participants"]) >= activity["max_participants"]:
+        raise HTTPException(status_code=400, detail="Activity is already at full capacity")
 
     # Validate student is not already signed up
-    if email in activity["participants"]:
+    if normalized_email in activity["participants"]:
         raise HTTPException(status_code=400, detail="Student already signed up for this activity")
 
     # Add student
-    activity["participants"].append(email)
-    return {"message": f"Signed up {email} for {activity_name}"}
+    activity["participants"].append(normalized_email)
+    return {"message": f"Signed up {normalized_email} for {activity_name}"}
 
 
 @app.delete("/activities/{activity_name}/participants")
